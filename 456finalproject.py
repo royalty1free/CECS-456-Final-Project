@@ -10,7 +10,11 @@ Anh Huynh
 Francisco Rivera 
 Aster Lee
 Andrew Bae
-<other names>
+Ian Escalante
+Carlos Bordallo
+Joshua Hicks
+
+Github: https://csulb.instructure.com/courses/32109/modules/items/1833633
 "
 """
 
