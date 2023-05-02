@@ -30,6 +30,8 @@ nox_by_time.get_figure().suptitle("Nitrous Oxide concentrations (ppb) by hourly 
 
 """Histogram"""
 
+# x = concentration of NOx(GT)
+# y = amount of data sets 
 nox_hist = data.hist(column="NOx(GT)", figsize=(18, 5), bins=350)
 
 """Line plot"""
@@ -37,6 +39,14 @@ nox_hist = data.hist(column="NOx(GT)", figsize=(18, 5), bins=350)
 nox_dated = data.groupby("Date", dropna=True)["NOx(GT)"].mean()
 nox_dated = pd.DataFrame(nox_dated).sort_values(by="Date", key=lambda series: series.apply(lambda x: datetime.strptime(x, '%m/%d/%Y')))
 nox_line = nox_dated.plot(title="NOx over time", figsize=(18, 5))
+
+"""Correlation Matrix (NOx(GT))
+
+
+"""
+
+correlation_matrix = data.corr(numeric_only = True)['NOx(GT)']
+print(correlation_matrix)
 
 """PCA"""
 
@@ -60,11 +70,11 @@ df = df.iloc[:, 1:15]
 df['Time_seconds'] = pd.to_timedelta(df['Time']).dt.total_seconds()
 df = df.drop(columns=['Time'])
 
-#Replacing NaN values with mean(Required since PCA does not deal with missing values)
+#Replacing NaN values(Required since PCA does not deal with missing values)
 #imputer = SimpleImputer(strategy='mean') #NOT GOOD TOO GENERAL
 #imputer = KNNImputer(n_neighbors=10) #Better
 #MICE Imputer
-imputer = IterativeImputer() #Best
+imputer = IterativeImputer(max_iter=1000) #Best
 
 df = pd.DataFrame(imputer.fit_transform(df), columns = imputer.get_feature_names_out())
 X = df.drop('NOx(GT)', axis=1)
@@ -85,22 +95,39 @@ test_scaled_data = scaler.transform(X_test)
 #print(scaled_data)
 
 #Conducting PCA (Not on Target Values)
-#pca = PCA(n_components = 13)
-pca = PCA(.99) #setting the desired amount of variance to be retained
+pca = PCA(n_components = 13)
+#pca = PCA(.99) #setting the desired amount of variance to be retained
 pca.fit(scaled_data)
+plt.plot(pca.explained_variance_ratio_)
+plt.xlabel('Number of Components')
+plt.ylabel('Eigenvalues')
+plt.title('PCA Eigenvalues')
+plt.show()
+
+#Conducting PCA (Not on Target Values)
+pca = PCA(n_components = 3)
+#pca = PCA(.99) #setting the desired amount of variance to be retained
+pca.fit(scaled_data)
+
 print(f'Number of Components: {pca.n_components_}')
 X_pca = pca.transform(scaled_data)
 X_test_pca = pca.transform(test_scaled_data)
 #displays the shape of the array
-print(flush='PCA Shape: {X_pca.shape}')
+#print(flush='PCA Shape: {X_pca.shape}')
 #print(X_pca)
 print(f'PCA Explained Variance: {pca.explained_variance_ratio_}')
 
-#Visual Representation of PCA with target N0x
-plt.figure(figsize=(8,6))
-plt.scatter(X_pca[:,0], X_pca[:,1], c = y_train)
-plt.xlabel('First principle component')
-plt.ylabel('Second principle component')
+#Visual Representation of PCA with target N0x (Not the Full Representation of the PCA dataset)
+#plt.figure(figsize=(8,6))
+fig = plt.figure(figsize=(12,16))
+fig = fig.add_subplot(111, projection='3d')
+fig.scatter(X_pca[:,0], X_pca[:,1], X_pca[:,2], c = y_train)
+
+#plt.scatter(X_pca[:,0], X_pca[:,1], X_pca[:,2], c = y_train)
+fig.set_xlabel('First principle component')
+fig.set_ylabel('Second principle component')
+fig.set_zlabel('Third principle component')
+plt.show()
 
 """K-Folds Cross Validation"""
 
@@ -109,12 +136,16 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet, BayesianRidge, HuberRegressor
 from sklearn.metrics import mean_squared_error, r2_score, make_scorer
 
+#Choose Model Type(Linear Regression)
 model = LinearRegression()
 model.fit(X_pca, y_train)
-scores = cross_val_score(model, X_pca, y_train, cv = 5, scoring='r2')
+
+#Use K-Folds Cross Validation to score how accurate the model is(r2)
+scores = cross_val_score(model, X_pca, y_train, cv = 10, scoring='r2')
 print(f'r2 scores: {scores}')
 print("Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
 
+#Make Prediction Using Testing Data
 prediction = model.predict(X_test_pca)
 MSE = mean_squared_error(y_test, prediction)
 r2 = r2_score(y_test, prediction)
@@ -132,7 +163,7 @@ models = {
     'Lasso Regression': Lasso(),
     'Elastic Net Regression': ElasticNet(),
     'Bayesian Ridge Regression': BayesianRidge(),
-    'Huber Regressor': HuberRegressor()
+    'Huber Regression': HuberRegressor()
 }
 
 #Establishing which params we are going to perform hyperparameter Tuning
@@ -142,7 +173,7 @@ params = {
     'Lasso Regression': {'alpha': [0.001, 0.01, 0.1, 1, 10]},
     'Elastic Net Regression': {'alpha': [0.001, 0.01, 0.1, 1, 10], 'l1_ratio': [0.1, 0.3, 0.5, 0.7, 0.9]},
     'Bayesian Ridge Regression': {'alpha_1': [1e-6, 1e-5, 1e-4, 1e-3, 1e-2], 'alpha_2': [1e-6, 1e-5, 1e-4, 1e-3, 1e-2], 'lambda_1': [1e-6, 1e-5, 1e-4, 1e-3, 1e-2], 'lambda_2': [1e-6, 1e-5, 1e-4, 1e-3, 1e-2]},
-    'Huber Regressor': {'epsilon': [1.25, 1.5, 1.75], 'alpha': [0.0001, 0.001, 0.01, 0.1, 1.0]}
+    'Huber Regression': {'epsilon': [1.25, 1.5, 1.75], 'alpha': [0.0001, 0.001, 0.01, 0.1, 1.0]}
 }
 
 #specifying the metric to use for evaluating the performance of the models
@@ -156,5 +187,6 @@ for name, model in models.items():
     print(f'Best hyperparameters: {grid_search.best_params_}')
     print(f'Train MSE: {mean_squared_error(y_train, grid_search.predict(X_pca))}')
     print(f'Test MSE: {mean_squared_error(y_test, grid_search.predict(X_test_pca))}')
-    print(f'r2 score: {r2_score(y_test, prediction)}')
+    print(f'Train r2 score: {r2_score(y_train, grid_search.predict(X_pca))}')
+    print(f'Test r2 score: {r2_score(y_test, grid_search.predict(X_test_pca))}')
     print(f'Best Score: {grid_search.best_score_} \n')
